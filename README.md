@@ -1,2 +1,2 @@
 # MindMark
- Notion like Markdown Editor
+ swift swiftui macos ios markdown knowledge-management note-taking blocknote wkwebview anthropic-claude ai
