@@ -1,0 +1,68 @@
+:root {
+  --mm-bg: #ffffff;
+  --mm-text: #1a1a2e;
+  --mm-border: #e5e5e5;
+  --mm-accent: #6366f1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mm-bg: #1a1a2e;
+    --mm-text: #e0e0e0;
+    --mm-border: #2d2d44;
+    --mm-accent: #818cf8;
+  }
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--mm-bg);
+  color: var(--mm-text);
+}
+
+.mindmark-editor {
+  padding: 24px 16px;
+  max-width: 720px;
+  margin: 0 auto;
+  min-height: 100%;
+}
+
+.bn-editor .bn-block-group > .bn-block-outer {
+  margin-bottom: 2px;
+}
+
+.bn-slash-menu {
+  border-radius: 10px;
+  border: 1px solid var(--mm-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+}
+
+.bn-formatting-toolbar {
+  border-radius: 8px;
+  border: 1px solid var(--mm-border);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.bn-editor [data-placeholder]::before {
+  opacity: 0.4;
+  font-style: normal;
+}
+
+@supports (-webkit-touch-callout: none) {
+  body {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  #root {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mindmark-editor {
+    padding-bottom: env(safe-area-inset-bottom, 24px);
+  }
+}
