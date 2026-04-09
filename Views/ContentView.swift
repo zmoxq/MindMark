@@ -545,7 +545,8 @@ struct EditorContainerView: View {
                     onContentChanged: { markdown, blocksJson in
                         vaultManager.contentDidChange(markdown: markdown, blocksJson: blocksJson)
                     },
-                    vaultManager: vaultManager
+                    vaultManager: vaultManager,
+                    themeCSS: vaultManager.themeCSS(for: vaultManager.currentTheme)
                 )
                 .id(editorId)
             }

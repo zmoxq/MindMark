@@ -1,5 +1,5 @@
 // EditorWebView.swift
-// WKWebView hosting BlockNote — dual format bridge + image upload + file dialog + vault file access
+// WKWebView hosting BlockNote — dual format bridge + image upload/download/resolve + file dialog + theme
 
 import SwiftUI
 import WebKit
@@ -15,6 +15,7 @@ struct EditorWebView: NSViewRepresentable {
     @Binding var blocksJson: String
     var onContentChanged: (String, String) -> Void
     var vaultManager: VaultManager
+    var themeCSS: String?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -32,7 +33,13 @@ struct EditorWebView: NSViewRepresentable {
         return webView
     }
 
-    func updateNSView(_ nsView: WKWebView, context: Context) {}
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        let newCSS = themeCSS ?? ""
+        if context.coordinator.lastAppliedThemeCSS != newCSS {
+            context.coordinator.applyTheme(css: newCSS)
+            context.coordinator.lastAppliedThemeCSS = newCSS
+        }
+    }
 }
 #endif
 
@@ -44,6 +51,7 @@ struct EditorWebView: UIViewRepresentable {
     @Binding var blocksJson: String
     var onContentChanged: (String, String) -> Void
     var vaultManager: VaultManager
+    var themeCSS: String?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -61,7 +69,13 @@ struct EditorWebView: UIViewRepresentable {
         return webView
     }
 
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        let newCSS = themeCSS ?? ""
+        if context.coordinator.lastAppliedThemeCSS != newCSS {
+            context.coordinator.applyTheme(css: newCSS)
+            context.coordinator.lastAppliedThemeCSS = newCSS
+        }
+    }
 }
 #endif
 
@@ -98,12 +112,8 @@ extension EditorWebView {
 
     static func loadEditor(in webView: WKWebView, vaultURL: URL?) {
         if let editorURL = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "Editor") {
-            // Grant read access to both Editor directory AND vault folder
-            // so WKWebView can display images from the attachment folders
             var accessURL = editorURL.deletingLastPathComponent()
             if let vault = vaultURL {
-                // Find common ancestor of Editor and vault, or just use root
-                // Simplest approach: grant access to the widest needed scope
                 accessURL = commonAncestor(editorURL, vault) ?? accessURL
             }
             webView.loadFileURL(editorURL, allowingReadAccessTo: accessURL)
@@ -185,6 +195,8 @@ extension EditorWebView {
         var vaultManager: VaultManager
         private var isEditorReady = false
         private var pendingLoad: (() -> Void)?
+        var lastAppliedThemeCSS: String = ""
+        private var pendingThemeCSS: String?
 
         init(
             markdown: Binding<String>,
@@ -216,6 +228,13 @@ extension EditorWebView {
                 } else if !markdown.isEmpty {
                     loadDocument(markdown: markdown)
                 }
+                // Apply pending theme after editor is ready
+                if let css = pendingThemeCSS {
+                    applyTheme(css: css)
+                    pendingThemeCSS = nil
+                } else if !lastAppliedThemeCSS.isEmpty {
+                    applyTheme(css: lastAppliedThemeCSS)
+                }
 
             case "contentChanged", "requestSave":
                 let md = payload?["markdown"] as? String ?? ""
@@ -228,6 +247,12 @@ extension EditorWebView {
 
             case "uploadImage":
                 handleImageUpload(payload)
+
+            case "downloadImage":
+                handleImageDownload(payload)
+
+            case "resolveImage":
+                handleImageResolve(payload)
 
             case "focusChanged":
                 break
@@ -242,7 +267,7 @@ extension EditorWebView {
             }
         }
 
-        // MARK: Image Upload
+        // MARK: Image Upload (local file → base64 → save to attachment folder)
 
         private func handleImageUpload(_ payload: [String: Any]?) {
             guard let requestId = payload?["requestId"] as? String,
@@ -260,18 +285,7 @@ extension EditorWebView {
                 return
             }
 
-            // Detect MIME type from file extension
-            let ext = (fileName as NSString).pathExtension.lowercased()
-            let mimeType: String
-            switch ext {
-            case "png": mimeType = "image/png"
-            case "jpg", "jpeg": mimeType = "image/jpeg"
-            case "gif": mimeType = "image/gif"
-            case "svg": mimeType = "image/svg+xml"
-            case "webp": mimeType = "image/webp"
-            case "tiff", "tif": mimeType = "image/tiff"
-            default: mimeType = "image/png"
-            }
+            let mimeType = mimeTypeForExtension((fileName as NSString).pathExtension.lowercased())
 
             Task { @MainActor in
                 guard let note = vaultManager.selectedNote else {
@@ -279,12 +293,12 @@ extension EditorWebView {
                     return
                 }
 
-                if let _ = vaultManager.saveAttachment(for: note, data: data, fileName: fileName) {
+                if let result = vaultManager.saveAttachment(for: note, data: data, fileName: fileName) {
                     // Return base64 data URL for immediate display in WKWebView
                     // (file:// URLs are blocked by sandbox)
                     let dataURL = "data:\(mimeType);base64,\(base64Data)"
                     sendImageUploadResult(requestId: requestId, relativePath: dataURL, error: nil)
-                    print("[Bridge] Image displayed via data URL")
+                    print("[Bridge] Image uploaded and displayed via data URL, saved at: \(result.relativePath)")
                 } else {
                     sendImageUploadResult(requestId: requestId, relativePath: nil, error: "Failed to save attachment")
                 }
@@ -314,6 +328,146 @@ extension EditorWebView {
             }
         }
 
+        // MARK: Image Download (http URL → URLSession download → save → return relative path)
+
+        private func handleImageDownload(_ payload: [String: Any]?) {
+            guard let requestId = payload?["requestId"] as? String,
+                  let urlString = payload?["url"] as? String,
+                  let url = URL(string: urlString) else {
+                print("[Bridge] Invalid downloadImage payload")
+                return
+            }
+
+            print("[Bridge] Downloading remote image: \(urlString.prefix(80))...")
+
+            Task {
+                do {
+                    let (data, response) = try await URLSession.shared.data(from: url)
+
+                    // Determine file extension from response or URL
+                    let httpResponse = response as? HTTPURLResponse
+                    let contentType = httpResponse?.value(forHTTPHeaderField: "Content-Type") ?? ""
+                    let ext = extensionForMimeType(contentType) ?? extensionFromURL(url) ?? "jpg"
+                    let fileName = "downloaded-\(Int(Date().timeIntervalSince1970)).\(ext)"
+
+                    await MainActor.run {
+                        guard let note = self.vaultManager.selectedNote else {
+                            self.sendImageDownloadResult(requestId: requestId, relativePath: nil, error: "No note selected")
+                            return
+                        }
+
+                        if let result = self.vaultManager.saveAttachment(for: note, data: data, fileName: fileName) {
+                            print("[Bridge] Remote image saved: \(result.relativePath)")
+                            self.sendImageDownloadResult(requestId: requestId, relativePath: result.relativePath, error: nil)
+                        } else {
+                            self.sendImageDownloadResult(requestId: requestId, relativePath: nil, error: "Failed to save downloaded image")
+                        }
+                    }
+                } catch {
+                    print("[Bridge] Image download failed: \(error)")
+                    await MainActor.run {
+                        self.sendImageDownloadResult(requestId: requestId, relativePath: nil, error: "Download failed: \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
+
+        private func sendImageDownloadResult(requestId: String, relativePath: String?, error: String?) {
+            guard let webView = webView else { return }
+
+            let pathStr = relativePath.map { "\"\(escapeForJS($0))\"" } ?? "null"
+            let errorStr = error.map { "\"\(escapeForJS($0))\"" } ?? "null"
+
+            let js = """
+            window.mindmark.receiveFromSwift('imageDownloaded', {
+                requestId: "\(escapeForJS(requestId))",
+                relativePath: \(pathStr),
+                error: \(errorStr)
+            })
+            """
+
+            DispatchQueue.main.async {
+                webView.evaluateJavaScript(js) { _, err in
+                    if let err = err {
+                        print("[Bridge] Failed to send imageDownloaded: \(err)")
+                    }
+                }
+            }
+        }
+
+        // MARK: Image Resolve (relative path → read file → return data URL)
+
+        private func handleImageResolve(_ payload: [String: Any]?) {
+            guard let requestId = payload?["requestId"] as? String,
+                  let relativePath = payload?["url"] as? String else {
+                print("[Bridge] Invalid resolveImage payload")
+                return
+            }
+
+            print("[Bridge] Resolving image: \(relativePath)")
+
+            Task { @MainActor in
+                guard let note = vaultManager.selectedNote,
+                      let vaultURL = vaultManager.vaultURL else {
+                    sendImageResolveResult(requestId: requestId, dataURL: nil)
+                    return
+                }
+
+                // Resolve the relative path against the note's parent directory
+                let noteDir = note.fullPath.deletingLastPathComponent()
+                let imageURL: URL
+
+                if relativePath.hasPrefix("./") {
+                    // Relative to note's directory: "./notename/image.png"
+                    let cleanPath = String(relativePath.dropFirst(2)) // remove "./"
+                    imageURL = noteDir.appendingPathComponent(cleanPath)
+                } else {
+                    // Try as relative to vault root
+                    imageURL = vaultURL.appendingPathComponent(relativePath)
+                }
+
+                guard FileManager.default.fileExists(atPath: imageURL.path) else {
+                    print("[Bridge] Image file not found: \(imageURL.path)")
+                    sendImageResolveResult(requestId: requestId, dataURL: nil)
+                    return
+                }
+
+                do {
+                    let data = try Data(contentsOf: imageURL)
+                    let ext = imageURL.pathExtension.lowercased()
+                    let mimeType = mimeTypeForExtension(ext)
+                    let base64 = data.base64EncodedString()
+                    let dataURL = "data:\(mimeType);base64,\(base64)"
+                    print("[Bridge] Image resolved: \(relativePath) → \(data.count / 1024)KB data URL")
+                    sendImageResolveResult(requestId: requestId, dataURL: dataURL)
+                } catch {
+                    print("[Bridge] Failed to read image file: \(error)")
+                    sendImageResolveResult(requestId: requestId, dataURL: nil)
+                }
+            }
+        }
+
+        private func sendImageResolveResult(requestId: String, dataURL: String?) {
+            guard let webView = webView else { return }
+
+            let dataURLStr = dataURL.map { "\"\(escapeForJS($0))\"" } ?? "null"
+
+            let js = """
+            window.mindmark.receiveFromSwift('imageResolved', {
+                requestId: "\(escapeForJS(requestId))",
+                dataURL: \(dataURLStr)
+            })
+            """
+
+            DispatchQueue.main.async {
+                webView.evaluateJavaScript(js) { _, err in
+                    if let err = err {
+                        print("[Bridge] Failed to send imageResolved: \(err)")
+                    }
+                }
+            }
+        }
+
         // MARK: Swift → JS
 
         func loadDocument(blocksJson: String) {
@@ -337,6 +491,19 @@ extension EditorWebView {
             let js = "window.mindmark.receiveFromSwift('loadDocument', {markdown: \"\(escaped)\"})"
             webView.evaluateJavaScript(js) { _, error in
                 if let error = error { print("[Bridge] Failed to load markdown: \(error)") }
+            }
+        }
+
+        func applyTheme(css: String) {
+            guard isEditorReady, let webView = webView else {
+                pendingThemeCSS = css
+                return
+            }
+            let escaped = escapeForJS(css)
+            let js = "window.mindmark.receiveFromSwift('applyTheme', {css: \"\(escaped)\"})"
+            webView.evaluateJavaScript(js) { _, error in
+                if let error = error { print("[Bridge] Failed to apply theme: \(error)") }
+                else { print("[Bridge] Theme applied (\(css.count) bytes)") }
             }
         }
 
@@ -381,6 +548,41 @@ extension EditorWebView {
                .replacingOccurrences(of: "\n", with: "\\n")
                .replacingOccurrences(of: "\r", with: "\\r")
                .replacingOccurrences(of: "\t", with: "\\t")
+        }
+
+        private func mimeTypeForExtension(_ ext: String) -> String {
+            switch ext {
+            case "png": return "image/png"
+            case "jpg", "jpeg": return "image/jpeg"
+            case "gif": return "image/gif"
+            case "svg": return "image/svg+xml"
+            case "webp": return "image/webp"
+            case "tiff", "tif": return "image/tiff"
+            case "bmp": return "image/bmp"
+            case "ico": return "image/x-icon"
+            default: return "image/png"
+            }
+        }
+
+        private func extensionForMimeType(_ mimeType: String) -> String? {
+            let map: [String: String] = [
+                "image/png": "png",
+                "image/jpeg": "jpg",
+                "image/gif": "gif",
+                "image/webp": "webp",
+                "image/svg+xml": "svg",
+                "image/tiff": "tiff",
+                "image/bmp": "bmp",
+                "image/x-icon": "ico",
+            ]
+            let cleaned = mimeType.components(separatedBy: ";").first?.trimmingCharacters(in: .whitespaces) ?? mimeType
+            return map[cleaned]
+        }
+
+        private func extensionFromURL(_ url: URL) -> String? {
+            let ext = url.pathExtension.lowercased()
+            let valid = ["png", "jpg", "jpeg", "gif", "webp", "svg", "tiff", "bmp", "ico"]
+            return valid.contains(ext) ? ext : nil
         }
     }
 }
