@@ -234,15 +234,17 @@ struct SidebarView: View {
             if !vaultManager.searchQuery.isEmpty {
                 SearchResultsView(selection: $selection)
             } else {
-                FileTreeView(selection: $selection)
+                SidebarContentView(selection: $selection)
             }
         }
         #if os(macOS)
         .frame(minWidth: 240, idealWidth: 260)
         #endif
-        .navigationTitle("Notes")
+        .navigationTitle("MindMark")
     }
 }
+
+// MARK: - Sidebar Content (Favorites + Recents + All Notes)
 
 // MARK: - Search Bar
 
@@ -313,56 +315,153 @@ struct SearchResultsView: View {
     }
 }
 
-// MARK: - File Tree
+// MARK: - Sidebar Content List
 
-struct FileTreeView: View {
+struct SidebarContentView: View {
     @EnvironmentObject var vaultManager: VaultManager
     @Binding var selection: Note?
 
     var body: some View {
         List(selection: $selection) {
-            ForEach(vaultManager.notes) { note in
-                if note.isDirectory {
-                    DisclosureGroup {
-                        if let children = note.children {
-                            ForEach(children) { child in
-                                NoteRow(note: child).tag(child)
+            // Favorites Section
+            let favorites = vaultManager.favoriteNotes()
+            if !favorites.isEmpty {
+                Section {
+                    ForEach(favorites) { note in
+                        SidebarNoteRow(note: note, style: .compact)
+                            .tag(note)
+                    }
+                } header: {
+                    SectionLabel(title: "Favorites", icon: "star.fill")
+                }
+            }
+
+            // Recents Section
+            let recents = vaultManager.recentNotes()
+            if !recents.isEmpty {
+                Section {
+                    ForEach(recents) { note in
+                        SidebarNoteRow(note: note, style: .compact)
+                            .tag(note)
+                    }
+                } header: {
+                    SectionLabel(title: "Recents", icon: "clock")
+                }
+            }
+
+            // All Notes Section
+            Section {
+                ForEach(vaultManager.notes) { note in
+                    if note.isDirectory {
+                        DisclosureGroup {
+                            if let children = note.children {
+                                ForEach(children) { child in
+                                    SidebarNoteRow(note: child, style: .full)
+                                        .tag(child)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "folder")
+                                    .font(.body)
+                                    .foregroundStyle(.brown.opacity(0.7))
+                                Text(note.name)
+                                    .font(.body)
                             }
                         }
-                    } label: {
-                        Label(note.name, systemImage: "folder.fill")
-                            .font(.body).foregroundStyle(.secondary)
+                    } else {
+                        SidebarNoteRow(note: note, style: .full)
+                            .tag(note)
                     }
-                } else {
-                    NoteRow(note: note).tag(note)
                 }
+            } header: {
+                SectionLabel(title: "All Notes", icon: "doc.on.doc")
             }
         }
         .listStyle(.sidebar)
     }
 }
 
-struct NoteRow: View {
+// MARK: - Section Label
+
+struct SectionLabel: View {
+    let title: String
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.caption2)
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+        }
+        .foregroundStyle(.secondary)
+        .textCase(.uppercase)
+    }
+}
+
+// MARK: - Sidebar Note Row
+
+enum NoteRowStyle {
+    case compact   // Just name, no date (for Favorites/Recents)
+    case full      // Name + relative date (for All Notes)
+}
+
+struct SidebarNoteRow: View {
     let note: Note
+    var style: NoteRowStyle = .full
     @EnvironmentObject var vaultManager: VaultManager
     @State private var showRenameAlert = false
     @State private var renameName = ""
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "doc.text")
+            Image(systemName: noteIcon)
                 .font(.body)
-                .foregroundStyle(.indigo.opacity(0.7))
-                .frame(width: 18)
+                .foregroundStyle(iconColor)
+                .frame(width: 20)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(note.name).font(.body).lineLimit(1)
-                Text(note.modifiedDate, style: .relative)
-                    .font(.caption).foregroundStyle(.tertiary)
+            switch style {
+            case .compact:
+                Text(note.name)
+                    .font(.body)
+                    .lineLimit(1)
+            case .full:
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(note.name)
+                        .font(.body)
+                        .lineLimit(1)
+                    Text(note.modifiedDate, style: .relative)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            Spacer()
+
+            // Star indicator for favorites
+            if vaultManager.isFavorite(note) && style == .full {
+                Image(systemName: "star.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.yellow)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 1)
         .contextMenu {
+            // Favorite / Unfavorite
+            Button {
+                vaultManager.toggleFavorite(note)
+            } label: {
+                if vaultManager.isFavorite(note) {
+                    Label("Remove from Favorites", systemImage: "star.slash")
+                } else {
+                    Label("Add to Favorites", systemImage: "star")
+                }
+            }
+
+            Divider()
+
             Button {
                 renameName = note.name
                 showRenameAlert = true
@@ -370,7 +469,6 @@ struct NoteRow: View {
                 Label("Rename", systemImage: "pencil")
             }
 
-            // Move to submenu
             let dirs = vaultManager.availableDirectories()
             if dirs.count > 1 {
                 Menu("Move to...") {
@@ -390,9 +488,8 @@ struct NoteRow: View {
             } label: {
                 Label("Show in Finder", systemImage: "folder")
             }
-            #endif
-
             Divider()
+            #endif
 
             Button(role: .destructive) {
                 vaultManager.deleteNote(note)
@@ -410,6 +507,17 @@ struct NoteRow: View {
         } message: {
             Text("Enter a new name for \"\(note.name)\"")
         }
+    }
+
+    private var noteIcon: String {
+        // Use different icons based on note type if available
+        if note.isDirectory { return "folder" }
+        return "doc.text"
+    }
+
+    private var iconColor: Color {
+        if vaultManager.selectedNote == note { return .indigo }
+        return .secondary.opacity(0.7)
     }
 }
 
@@ -518,7 +626,6 @@ struct EditorTitleBar: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(showAIPanel ? Color.indigo.opacity(0.15) : Color.gray.opacity(0.1), in: Capsule())
-//                .background(showAIPanel ? .indigo.opacity(0.15) : .fill.tertiary, in: Capsule())
             }
             .buttonStyle(.plain)
             .foregroundStyle(showAIPanel ? .indigo : .secondary)

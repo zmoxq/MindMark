@@ -54,18 +54,30 @@ class VaultManager: ObservableObject {
     @Published var searchResults: [SearchResult] = []
     @Published var isSearching: Bool = false
 
+    // Theme
+    @Published var currentTheme: String = "default" {
+        didSet { UserDefaults.standard.set(currentTheme, forKey: "selectedTheme") }
+    }
+    @Published var availableThemes: [ThemeInfo] = []
+
+    // Favorites
+    @Published var favoriteNoteIds: Set<String> = []
+
     // Auto-save
     private let autoSaveInterval: TimeInterval = 2.0
     private var autoSaveWork: DispatchWorkItem?
 
     // File watching
     private var fileWatchTimer: Timer?
-    private var lastKnownModDates: [String: Date] = [:]  // note.id → mod date
+    private var lastKnownModDates: [String: Date] = [:]
 
     init() {
+        currentTheme = UserDefaults.standard.string(forKey: "selectedTheme") ?? "default"
+        favoriteNoteIds = Set(UserDefaults.standard.stringArray(forKey: "favoriteNotes") ?? [])
         restoreVaultBookmark()
         if let url = vaultURL {
             loadNotes(from: url)
+            loadThemes()
             startFileWatching()
         }
     }
@@ -314,7 +326,7 @@ class VaultManager: ObservableObject {
         print("[Vault] Saved: \(note.name)")
     }
 
-    func createNote(name: String, in directory: URL? = nil) {
+    func createNote(name: String, template: NoteTemplate = .default, in directory: URL? = nil) {
         guard let vault = vaultURL else { return }
         let parentDir = directory ?? vault
         let sanitized = name.replacingOccurrences(of: "/", with: "-")
@@ -324,7 +336,8 @@ class VaultManager: ObservableObject {
         guard !FileManager.default.fileExists(atPath: fileURL.path) else { return }
 
         do {
-            try "# \(name)\n\n".write(to: fileURL, atomically: true, encoding: .utf8)
+            let content = template.initialContent(title: name)
+            try content.write(to: fileURL, atomically: true, encoding: .utf8)
             loadNotes(from: vault)
             updateModDateCache()
             let relPath = fileURL.path.replacingOccurrences(of: vault.path + "/", with: "")
@@ -539,6 +552,36 @@ class VaultManager: ObservableObject {
 
     func clearSearch() { searchQuery = ""; searchResults = []; isSearching = false }
 
+    // MARK: - Favorites
+
+    func isFavorite(_ note: Note) -> Bool {
+        favoriteNoteIds.contains(note.id)
+    }
+
+    func toggleFavorite(_ note: Note) {
+        if favoriteNoteIds.contains(note.id) {
+            favoriteNoteIds.remove(note.id)
+        } else {
+            favoriteNoteIds.insert(note.id)
+        }
+        saveFavorites()
+    }
+
+    func favoriteNotes() -> [Note] {
+        let all = allNotes()
+        return all.filter { favoriteNoteIds.contains($0.id) }
+    }
+
+    /// Recently modified notes (top 8)
+    func recentNotes() -> [Note] {
+        let all = allNotes()
+        return Array(all.sorted { $0.modifiedDate > $1.modifiedDate }.prefix(8))
+    }
+
+    private func saveFavorites() {
+        UserDefaults.standard.set(Array(favoriteNoteIds), forKey: "favoriteNotes")
+    }
+
     // MARK: - Helpers
 
     func allNotes() -> [Note] {
@@ -576,6 +619,70 @@ class VaultManager: ObservableObject {
             result.append((note.name, note.fullPath))
             if let children = note.children { collectDirectories(from: children, into: &result) }
         }
+    }
+
+    // MARK: - Theme Management
+
+    struct ThemeInfo: Identifiable, Hashable {
+        let id: String        // "default", "duying", "minimal-dark", or filename
+        let name: String      // Display name
+        let isBuiltIn: Bool
+        let cssPath: URL?     // nil for default theme
+    }
+
+    /// Custom themes directory: ~/Library/Application Support/MindMark/Themes/
+    static var customThemesDirectory: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("MindMark/Themes")
+    }
+
+    /// Load available themes (built-in from Resources + custom from Application Support)
+    func loadThemes() {
+        var themes: [ThemeInfo] = []
+
+        // Default (no custom CSS)
+        themes.append(ThemeInfo(id: "default", name: "Default", isBuiltIn: true, cssPath: nil))
+
+        // Built-in themes from app bundle
+        let builtInThemes = [
+            ("duying", "DuYing (读营)"),
+            ("minimal-dark", "Minimal Dark"),
+            ("academic", "Academic")
+        ]
+
+        for (fileName, displayName) in builtInThemes {
+            if let url = Bundle.main.url(forResource: fileName, withExtension: "css") {
+                themes.append(ThemeInfo(id: fileName, name: displayName, isBuiltIn: true, cssPath: url))
+            }
+        }
+
+        // Custom themes from ~/Library/Application Support/MindMark/Themes/
+        let customDir = Self.customThemesDirectory
+        let fm = FileManager.default
+
+        // Create directory if it doesn't exist
+        if !fm.fileExists(atPath: customDir.path) {
+            try? fm.createDirectory(at: customDir, withIntermediateDirectories: true)
+        }
+
+        if let files = try? fm.contentsOfDirectory(at: customDir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+            for file in files where file.pathExtension == "css" {
+                let name = file.deletingPathExtension().lastPathComponent
+                let displayName = name.replacingOccurrences(of: "-", with: " ").capitalized
+                themes.append(ThemeInfo(id: "custom-\(name)", name: displayName, isBuiltIn: false, cssPath: file))
+            }
+        }
+
+        availableThemes = themes
+    }
+
+    /// Get the CSS content for a theme
+    func themeCSS(for themeId: String) -> String? {
+        guard let theme = availableThemes.first(where: { $0.id == themeId }),
+              let cssPath = theme.cssPath else {
+            return nil  // default theme = no custom CSS
+        }
+        return try? String(contentsOf: cssPath, encoding: .utf8)
     }
 
     // MARK: - Bookmark Persistence

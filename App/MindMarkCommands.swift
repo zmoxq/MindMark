@@ -1,5 +1,5 @@
 // MindMarkCommands.swift
-// macOS menu bar commands (⌘N new note, ⌘S save, ⌘⇧O open vault)
+// macOS menu bar commands
 
 import SwiftUI
 
@@ -8,8 +8,10 @@ struct MindMarkCommands: Commands {
     @ObservedObject var vaultManager: VaultManager
 
     var body: some Commands {
+        // File menu additions
         CommandGroup(after: .newItem) {
             Button("New Note") {
+                // Trigger new note creation
                 NotificationCenter.default.post(name: .createNewNote, object: nil)
             }
             .keyboardShortcut("n", modifiers: [.command])
@@ -22,6 +24,7 @@ struct MindMarkCommands: Commands {
             .keyboardShortcut("o", modifiers: [.command, .shift])
         }
 
+        // Save
         CommandGroup(replacing: .saveItem) {
             Button("Save") {
                 vaultManager.saveCurrentNote()

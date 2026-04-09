@@ -1,0 +1,172 @@
+/* Academic Theme for MindMark / BlockNote */
+/* Clean serif-based style inspired by academic papers */
+
+.bn-editor {
+    --mm-font: 'Georgia', 'Palatino', 'Times New Roman', serif;
+    --mm-code-font: 'SF Mono', 'Fira Code', Menlo, monospace;
+    --mm-text: #2c3e50;
+    --mm-bg: #fdfcfa;
+    --mm-accent: #2c3e50;
+    --mm-link: #1a5276;
+    --mm-link-underline: #1a5276;
+    --mm-code-fg: #c0392b;
+    --mm-code-bg: #f5f0eb;
+    --mm-codeblock-bg: #f5f0eb;
+    --mm-codeblock-fg: #2c3e50;
+    --mm-blockquote-border: #bdc3c7;
+    --mm-blockquote-bg: #f9f7f4;
+    --mm-table-even: #f5f2ed;
+    --mm-table-hover: #edeae5;
+    --mm-table-border: #d5d0c8;
+    --mm-table-header: #e8e3db;
+    --mm-highlight-fg: #2c3e50;
+    --mm-highlight-bg: #f9e79f;
+    --mm-hr-color: #bdc3c7;
+    --mm-task-checked: #27ae60;
+    --mm-select-bg: rgba(52, 152, 219, 0.2);
+
+    font-family: var(--mm-font) !important;
+    color: var(--mm-text);
+    background-color: var(--mm-bg) !important;
+    line-height: 1.9;
+    font-size: 17px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Headings (sans-serif for contrast) ────────── */
+
+.bn-editor [data-node-type="heading"] {
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif !important;
+    color: var(--mm-accent) !important;
+}
+
+.bn-editor [data-node-type="heading"][data-level="1"] {
+    font-size: 2em !important;
+    text-align: center;
+    margin: 2em 0 1em !important;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.bn-editor [data-node-type="heading"][data-level="2"] {
+    font-size: 1.5em !important;
+    margin: 1.8em 0 0.8em !important;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid #d5d0c8;
+}
+
+.bn-editor [data-node-type="heading"][data-level="3"] {
+    font-size: 1.25em !important;
+    margin: 1.5em 0 0.6em !important;
+    font-style: italic;
+}
+
+/* ─── Paragraphs ────────────────────────────────── */
+
+.bn-editor [data-node-type="paragraph"] {
+    line-height: 1.9;
+    text-align: justify;
+    hyphens: auto;
+}
+
+/* ─── Links ─────────────────────────────────────── */
+
+.bn-editor a {
+    color: var(--mm-link) !important;
+    text-decoration: none !important;
+    border-bottom: 1px solid var(--mm-link-underline) !important;
+}
+
+.bn-editor a:hover {
+    color: #2980b9 !important;
+}
+
+/* ─── Inline Code ───────────────────────────────── */
+
+.bn-editor code {
+    font-family: var(--mm-code-font) !important;
+    font-size: 0.85em !important;
+    color: var(--mm-code-fg) !important;
+    background-color: var(--mm-code-bg) !important;
+    padding: 1px 5px !important;
+    border-radius: 2px !important;
+}
+
+/* ─── Code Blocks ───────────────────────────────── */
+
+.bn-editor pre {
+    background: var(--mm-codeblock-bg) !important;
+    color: var(--mm-codeblock-fg) !important;
+    border: 1px solid #d5d0c8 !important;
+    border-radius: 2px !important;
+    font-family: var(--mm-code-font) !important;
+    font-size: 0.9em !important;
+}
+
+/* ─── Blockquotes ───────────────────────────────── */
+
+.bn-editor [data-node-type="blockquote"],
+.bn-editor blockquote {
+    border-left: 3px solid var(--mm-blockquote-border) !important;
+    background-color: var(--mm-blockquote-bg) !important;
+    padding: 12px 20px !important;
+    font-style: italic;
+    color: #555;
+}
+
+/* ─── Tables ────────────────────────────────────── */
+
+.bn-editor table {
+    font-size: 0.95em;
+}
+
+.bn-editor table tr:nth-child(2n) {
+    background-color: var(--mm-table-even);
+}
+
+.bn-editor table tr:hover {
+    background-color: var(--mm-table-hover);
+}
+
+.bn-editor table th {
+    background-color: var(--mm-table-header) !important;
+    border: 1px solid var(--mm-table-border) !important;
+    font-family: -apple-system, sans-serif !important;
+    font-weight: 600;
+    padding: 8px 12px;
+}
+
+.bn-editor table td {
+    border: 1px solid var(--mm-table-border) !important;
+    padding: 8px 12px;
+}
+
+/* ─── Horizontal Rule ───────────────────────────── */
+
+.bn-editor hr {
+    border: 0 !important;
+    height: 1px !important;
+    background: linear-gradient(to right, transparent, var(--mm-hr-color), transparent) !important;
+    margin: 2.5em 0 !important;
+}
+
+/* ─── Images ────────────────────────────────────── */
+
+.bn-editor img {
+    border-radius: 2px;
+    border: 1px solid #e0dcd5;
+}
+
+/* ─── Selection ─────────────────────────────────── */
+
+.bn-editor ::selection {
+    background: var(--mm-select-bg);
+}
+
+/* ─── Highlight ─────────────────────────────────── */
+
+.bn-editor mark {
+    background-color: var(--mm-highlight-bg) !important;
+    color: var(--mm-highlight-fg) !important;
+    padding: 1px 3px;
+}

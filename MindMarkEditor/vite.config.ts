@@ -6,11 +6,14 @@ export default defineConfig({
   base: "./",
   build: {
     outDir: "dist",
+    // Single file output for easy embedding in WKWebView
     rollupOptions: {
       output: {
+        // Inline all JS/CSS into a single HTML file
         manualChunks: undefined,
       },
     },
+    // Ensure assets are inlined
     assetsInlineLimit: 100000000,
   },
 });

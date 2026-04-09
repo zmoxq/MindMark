@@ -1,0 +1,169 @@
+/* Minimal Dark Theme for MindMark / BlockNote */
+/* Clean, low-contrast dark theme for focused writing */
+
+.bn-editor {
+    --mm-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    --mm-code-font: 'SF Mono', 'Fira Code', Menlo, monospace;
+    --mm-text: #d4d4d4;
+    --mm-bg: #1e1e1e;
+    --mm-accent: #569cd6;
+    --mm-link: #4fc1ff;
+    --mm-link-underline: #4fc1ff;
+    --mm-code-fg: #ce9178;
+    --mm-code-bg: #2d2d2d;
+    --mm-codeblock-bg: #252526;
+    --mm-codeblock-fg: #d4d4d4;
+    --mm-blockquote-border: #569cd6;
+    --mm-blockquote-bg: #1a2332;
+    --mm-table-even: #2a2a2a;
+    --mm-table-hover: #2d3748;
+    --mm-table-border: #404040;
+    --mm-table-header: #333333;
+    --mm-highlight-fg: #1e1e1e;
+    --mm-highlight-bg: #e2b714;
+    --mm-hr-color: #404040;
+    --mm-task-checked: #569cd6;
+    --mm-select-bg: rgba(86, 156, 214, 0.3);
+
+    font-family: var(--mm-font) !important;
+    color: var(--mm-text);
+    background-color: var(--mm-bg) !important;
+    line-height: 1.7;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Headings ──────────────────────────────────── */
+
+.bn-editor [data-node-type="heading"] {
+    color: #e0e0e0 !important;
+}
+
+.bn-editor [data-node-type="heading"][data-level="1"] {
+    font-size: 2em !important;
+    color: #ffffff !important;
+    margin: 1.5em 0 0.8em !important;
+    border-bottom: 1px solid #333;
+    padding-bottom: 0.3em;
+}
+
+.bn-editor [data-node-type="heading"][data-level="2"] {
+    font-size: 1.5em !important;
+    color: #569cd6 !important;
+    margin: 1.4em 0 0.7em !important;
+}
+
+.bn-editor [data-node-type="heading"][data-level="3"] {
+    font-size: 1.25em !important;
+    margin: 1.2em 0 0.6em !important;
+}
+
+/* ─── Links ─────────────────────────────────────── */
+
+.bn-editor a {
+    color: var(--mm-link) !important;
+    text-decoration: none !important;
+    border-bottom: 1px solid rgba(79, 193, 255, 0.3) !important;
+}
+
+.bn-editor a:hover {
+    border-bottom-color: var(--mm-link) !important;
+}
+
+/* ─── Inline Code ───────────────────────────────── */
+
+.bn-editor code {
+    font-family: var(--mm-code-font) !important;
+    font-size: 0.88em !important;
+    color: var(--mm-code-fg) !important;
+    background-color: var(--mm-code-bg) !important;
+    padding: 2px 6px !important;
+    border-radius: 3px !important;
+}
+
+/* ─── Code Blocks ───────────────────────────────── */
+
+.bn-editor pre {
+    background: var(--mm-codeblock-bg) !important;
+    color: var(--mm-codeblock-fg) !important;
+    border-radius: 4px !important;
+    font-family: var(--mm-code-font) !important;
+    border: 1px solid #333 !important;
+}
+
+/* ─── Blockquotes ───────────────────────────────── */
+
+.bn-editor [data-node-type="blockquote"],
+.bn-editor blockquote {
+    border-left: 4px solid var(--mm-blockquote-border) !important;
+    background-color: var(--mm-blockquote-bg) !important;
+    padding: 10px 16px !important;
+    color: #b0b0b0;
+    border-radius: 0 4px 4px 0 !important;
+}
+
+/* ─── Tables ────────────────────────────────────── */
+
+.bn-editor table tr:nth-child(2n) {
+    background-color: var(--mm-table-even);
+}
+
+.bn-editor table tr:hover {
+    background-color: var(--mm-table-hover);
+}
+
+.bn-editor table th {
+    background-color: var(--mm-table-header) !important;
+    border: 1px solid var(--mm-table-border) !important;
+    color: #e0e0e0;
+}
+
+.bn-editor table td {
+    border: 1px solid var(--mm-table-border) !important;
+}
+
+/* ─── Horizontal Rule ───────────────────────────── */
+
+.bn-editor hr {
+    border: 0 !important;
+    height: 1px !important;
+    background: var(--mm-hr-color) !important;
+    margin: 2em 0 !important;
+}
+
+/* ─── Checkbox ──────────────────────────────────── */
+
+.bn-editor [data-node-type="checkListItem"] input[type="checkbox"] {
+    accent-color: var(--mm-task-checked);
+}
+
+/* ─── Images ────────────────────────────────────── */
+
+.bn-editor img {
+    border-radius: 4px;
+    opacity: 0.95;
+}
+
+/* ─── Selection ─────────────────────────────────── */
+
+.bn-editor ::selection {
+    background: var(--mm-select-bg);
+}
+
+/* ─── Highlight ─────────────────────────────────── */
+
+.bn-editor mark {
+    background-color: var(--mm-highlight-bg) !important;
+    color: var(--mm-highlight-fg) !important;
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+
+/* ─── Slash menu / toolbar dark adaptation ──────── */
+
+.bn-slash-menu,
+.bn-formatting-toolbar {
+    background: #2d2d2d !important;
+    border: 1px solid #404040 !important;
+    color: #d4d4d4 !important;
+}

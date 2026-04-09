@@ -49,6 +49,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		3A2C7A292F880F5F001CE4B8 /* Resources */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		3A7AA38D2F7F6B230006C360 /* MindMark */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MindMark;
@@ -119,6 +124,7 @@
 		3A7AA3822F7F6B230006C360 = {
 			isa = PBXGroup;
 			children = (
+				3A2C7A292F880F5F001CE4B8 /* Resources */,
 				3A7AAD2E2F7F6E000006C360 /* Editor */,
 				3A7AA38D2F7F6B230006C360 /* MindMark */,
 				3A7AA39B2F7F6B250006C360 /* MindMarkTests */,
@@ -159,6 +165,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				3A2C7A292F880F5F001CE4B8 /* Resources */,
 				3A7AA38D2F7F6B230006C360 /* MindMark */,
 				3A7AA3B72F7F6B990006C360 /* App */,
 				3A7AA3B92F7F6B990006C360 /* Bridge */,
@@ -187,6 +194,7 @@
 				3A7AA39A2F7F6B250006C360 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
+				3A2C7A292F880F5F001CE4B8 /* Resources */,
 				3A7AA39B2F7F6B250006C360 /* MindMarkTests */,
 				3A7AA3B72F7F6B990006C360 /* App */,
 				3A7AA3B92F7F6B990006C360 /* Bridge */,
@@ -215,6 +223,7 @@
 				3A7AA3A42F7F6B250006C360 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
+				3A2C7A292F880F5F001CE4B8 /* Resources */,
 				3A7AA3A52F7F6B250006C360 /* MindMarkUITests */,
 				3A7AA3B72F7F6B990006C360 /* App */,
 				3A7AA3B92F7F6B990006C360 /* Bridge */,
@@ -461,7 +470,7 @@
 				DEVELOPMENT_TEAM = 2LLSQWVCDY;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
@@ -515,7 +524,7 @@
 				DEVELOPMENT_TEAM = 2LLSQWVCDY;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;

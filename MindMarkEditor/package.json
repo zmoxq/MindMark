@@ -2,6 +2,7 @@
   "name": "mindmark-editor",
   "version": "0.1.0",
   "private": true,
+  "description": "Notion-style block editor for MindMark, built on BlockNote",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

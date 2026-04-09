@@ -48,7 +48,6 @@ async function blobUrlToBase64(blobUrl: string): Promise<{
   const response = await fetch(blobUrl);
   const blob = await response.blob();
   const mimeType = blob.type || "image/png";
-
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -61,8 +60,6 @@ async function blobUrlToBase64(blobUrl: string): Promise<{
   });
 }
 
-// ─── Extension helper ────────────────────────────────────────────────
-
 function mimeToExtension(mimeType: string): string {
   const map: Record<string, string> = {
     "image/png": "png",
@@ -70,25 +67,66 @@ function mimeToExtension(mimeType: string): string {
     "image/gif": "gif",
     "image/webp": "webp",
     "image/svg+xml": "svg",
-    "image/tiff": "tiff",
   };
   return map[mimeType] || "png";
 }
 
-// ─── Upload handler (for /image → Upload file dialog) ────────────────
+// ─── Theme injection ─────────────────────────────────────────────────
+
+const THEME_STYLE_ID = "mindmark-theme";
+
+function applyThemeCSS(css: string) {
+  let styleEl = document.getElementById(THEME_STYLE_ID) as HTMLStyleElement;
+  if (!styleEl) {
+    styleEl = document.createElement("style");
+    styleEl.id = THEME_STYLE_ID;
+    document.head.appendChild(styleEl);
+  }
+  styleEl.textContent = css;
+  bridge.log(`Theme applied (${css.length} bytes)`);
+}
+
+function clearTheme() {
+  const styleEl = document.getElementById(THEME_STYLE_ID);
+  if (styleEl) styleEl.textContent = "";
+  bridge.log("Theme cleared (using default)");
+}
+
+// ─── Upload handler (for /image → Upload) ────────────────────────────
 
 async function uploadFile(file: File): Promise<string> {
   try {
     const base64 = await fileToBase64(file);
     const fileName = file.name || `image-${Date.now()}.png`;
-    bridge.log(`Uploading image: ${fileName} (${Math.round(base64.length / 1024)}KB)`);
-
-    const dataUrl = await bridge.uploadImage(base64, fileName);
-    bridge.log(`Image saved: ${fileName}`);
-    return dataUrl;
+    bridge.log(
+      `Uploading image: ${fileName} (${Math.round(base64.length / 1024)}KB)`
+    );
+    const relativePath = await bridge.uploadImage(base64, fileName);
+    bridge.log(`Image saved: ${relativePath}`);
+    return relativePath;
   } catch (e) {
     bridge.log(`Image upload failed: ${e}`);
     throw e;
+  }
+}
+
+// ─── Resolve handler (for displaying images) ─────────────────────────
+
+async function resolveFileUrl(url: string): Promise<string> {
+  if (url.startsWith("data:") || url.startsWith("blob:")) {
+    return url;
+  }
+  // http URLs will be downloaded by processRemoteImages, so just pass through
+  if (url.startsWith("http")) {
+    return url;
+  }
+  // Relative path → ask Swift to read file and return data URL
+  try {
+    const dataURL = await bridge.resolveImage(url);
+    return dataURL;
+  } catch (e) {
+    bridge.log(`Failed to resolve image: ${url} — ${e}`);
+    return url;
   }
 }
 
@@ -97,27 +135,24 @@ async function uploadFile(file: File): Promise<string> {
 export default function Editor() {
   const editor = useCreateBlockNote({
     uploadFile,
+    resolveFileUrl,
     domAttributes: {
       editor: { class: "mindmark-editor" },
     },
   });
 
-  // Track blob URLs we've already processed to avoid duplicates
-  const processedBlobUrls = useRef<Set<string>>(new Set());
+  // Track URLs we've already processed
+  const processedUrls = useRef<Set<string>>(new Set());
 
-  // ─── Scan for blob URLs and upload them ────────────────────────
+  // ─── Scan and process non-local image URLs ─────────────────────
 
-  const processBlobImages = useCallback(async () => {
+  const processImages = useCallback(async () => {
     if (!editor) return;
-
-    // Walk through all blocks looking for image blocks with blob: URLs
-    const blocks = editor.document;
-
-    for (const block of blocks) {
-      await scanAndUploadBlobs(block);
+    for (const block of editor.document) {
+      await scanBlock(block);
     }
 
-    async function scanAndUploadBlobs(block: Block) {
+    async function scanBlock(block: Block) {
       if (
         block.type === "image" &&
         block.props &&
@@ -125,33 +160,52 @@ export default function Editor() {
       ) {
         const url = (block.props as Record<string, unknown>).url as string;
 
-        // Check if it's a blob URL that we haven't processed yet
-        if (url.startsWith("blob:") && !processedBlobUrls.current.has(url)) {
-          processedBlobUrls.current.add(url);
-          bridge.log(`Found blob image, uploading: ${url.substring(0, 50)}...`);
+        // Skip already processed, relative paths, and data URLs
+        if (
+          processedUrls.current.has(url) ||
+          url.startsWith("./") ||
+          url.startsWith("data:") ||
+          url === ""
+        ) {
+          return;
+        }
 
+        processedUrls.current.add(url);
+
+        // Handle blob: URLs (from paste)
+        if (url.startsWith("blob:")) {
+          bridge.log(`Found blob image, uploading...`);
           try {
             const { base64, mimeType } = await blobUrlToBase64(url);
             const ext = mimeToExtension(mimeType);
             const fileName = `pasted-${Date.now()}.${ext}`;
-
-            const dataUrl = await bridge.uploadImage(base64, fileName);
-            bridge.log(`Pasted image saved: ${fileName}`);
-
-            // Update the block's URL from blob: to data: URL
-            editor.updateBlock(block.id, {
-              props: { url: dataUrl },
-            });
+            const relativePath = await bridge.uploadImage(base64, fileName);
+            bridge.log(`Pasted image saved: ${relativePath}`);
+            editor.updateBlock(block.id, { props: { url: relativePath } });
           } catch (e) {
-            bridge.log(`Failed to process pasted image: ${e}`);
+            bridge.log(`Failed to process blob image: ${e}`);
           }
+          return;
+        }
+
+        // Handle http/https URLs (from embed)
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+          bridge.log(`Found remote image, downloading: ${url.substring(0, 80)}...`);
+          try {
+            const relativePath = await bridge.downloadImage(url);
+            bridge.log(`Remote image downloaded: ${relativePath}`);
+            editor.updateBlock(block.id, { props: { url: relativePath } });
+          } catch (e) {
+            bridge.log(`Failed to download remote image: ${e}`);
+            // Keep the http URL as fallback
+          }
+          return;
         }
       }
 
-      // Recurse into children
       if (block.children) {
         for (const child of block.children) {
-          await scanAndUploadBlobs(child);
+          await scanBlock(child);
         }
       }
     }
@@ -175,11 +229,10 @@ export default function Editor() {
   useEffect(() => {
     if (!editor) return;
     editor.onChange(() => {
-      // Check for blob images on every change
-      processBlobImages();
+      processImages();
       debouncedSave();
     });
-  }, [editor, debouncedSave, processBlobImages]);
+  }, [editor, debouncedSave, processImages]);
 
   // ─── Handle messages from Swift ──────────────────────────────────
 
@@ -187,9 +240,7 @@ export default function Editor() {
     onSwiftMessage("loadDocument", async (payload) => {
       const data = payload as { markdown?: string; blocksJson?: string };
       try {
-        // Clear processed blob cache on new document
-        processedBlobUrls.current.clear();
-
+        processedUrls.current.clear();
         if (data.blocksJson) {
           const blocks = JSON.parse(data.blocksJson) as Block[];
           editor.replaceBlocks(editor.document, blocks);
@@ -216,14 +267,21 @@ export default function Editor() {
 
     onSwiftMessage("newDocument", () => {
       editor.replaceBlocks(editor.document, []);
-      processedBlobUrls.current.clear();
+      processedUrls.current.clear();
       bridge.log("New document created");
+    });
+
+    onSwiftMessage("applyTheme", (payload) => {
+      const { css } = payload as { css: string };
+      if (css && css.length > 0) {
+        applyThemeCSS(css);
+      } else {
+        clearTheme();
+      }
     });
 
     bridge.editorReady();
   }, [editor]);
-
-  // ─── Render ──────────────────────────────────────────────────────
 
   return (
     <div style={{ height: "100vh", overflow: "auto" }}>

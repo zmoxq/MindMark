@@ -1,3 +1,5 @@
+/* ─── MindMark Editor Styles ─────────────────────────────────────── */
+
 :root {
   --mm-bg: #ffffff;
   --mm-text: #1a1a2e;
@@ -14,7 +16,9 @@
   }
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
   margin: 0;
@@ -23,6 +27,8 @@ html, body, #root {
   color: var(--mm-text);
 }
 
+/* ─── BlockNote Overrides ────────────────────────────────────────── */
+
 .mindmark-editor {
   padding: 24px 16px;
   max-width: 720px;
@@ -30,38 +36,48 @@ html, body, #root {
   min-height: 100%;
 }
 
+/* Clean up default BlockNote spacing for a more Notion-like feel */
 .bn-editor .bn-block-group > .bn-block-outer {
   margin-bottom: 2px;
 }
 
+/* Slash menu styling */
 .bn-slash-menu {
   border-radius: 10px;
   border: 1px solid var(--mm-border);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
 }
 
+/* Formatting toolbar */
 .bn-formatting-toolbar {
   border-radius: 8px;
   border: 1px solid var(--mm-border);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
+/* Placeholder text */
 .bn-editor [data-placeholder]::before {
   opacity: 0.4;
   font-style: normal;
 }
 
+/* ─── iOS-specific adjustments ───────────────────────────────────── */
+
 @supports (-webkit-touch-callout: none) {
+  /* iOS: prevent rubber-band scrolling issues */
   body {
     position: fixed;
     width: 100%;
     height: 100%;
     overflow: hidden;
   }
+
   #root {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
+
+  /* Adjust padding for iOS safe area */
   .mindmark-editor {
     padding-bottom: env(safe-area-inset-bottom, 24px);
   }

@@ -1,0 +1,309 @@
+/* DuYing (读营) Theme for MindMark / BlockNote */
+
+/* ─── CSS Variables ─────────────────────────────────────────────── */
+
+.bn-editor {
+    --mm-font: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    --mm-code-font: 'JetBrains Mono', 'SF Mono', 'Fira Code', Menlo, monospace;
+    --mm-text: #000000;
+    --mm-para: #000000;
+    --mm-accent: #00c4b6;
+    --mm-focus: #ff5d52;
+    --mm-link-text: black;
+    --mm-link-underline: #ff6600;
+    --mm-code-fg: #ff3502;
+    --mm-code-bg: #f8f5ec;
+    --mm-codeblock-bg: #fafafa;
+    --mm-blockquote-border: #5fa7e4;
+    --mm-blockquote-bg: #f4fcff;
+    --mm-table-even: rgb(238, 240, 244);
+    --mm-table-hover: #e0f8f8;
+    --mm-table-border: #c5c5c5;
+    --mm-table-header-bg: #b9c2c6;
+    --mm-highlight-fg: red;
+    --mm-highlight-bg: yellow;
+    --mm-hr-color: #00c4b6;
+    --mm-task-border: red;
+    --mm-task-checked: #00c4b6;
+    --mm-select-bg: #81cff6;
+    --mm-list-color: #0abaae;
+
+    font-family: var(--mm-font) !important;
+    color: var(--mm-text);
+    line-height: 1.8;
+    letter-spacing: 0;
+    font-size: 17px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Full Width with side margins ──────────────────────────────── */
+
+.bn-editor,
+.bn-editor .bn-block-group,
+.bn-editor > .bn-block-group {
+    max-width: 100% !important;
+    width: 100% !important;
+}
+
+.mindmark-editor {
+    max-width: 100% !important;
+    padding: 24px 48px !important;
+}
+
+/* ─── Heading Counters (auto-numbering) ─────────────────────────── */
+
+.bn-editor {
+    counter-reset: h2counter;
+}
+
+.bn-editor [data-content-type="heading"][data-level="2"] {
+    counter-reset: h3counter;
+}
+
+.bn-editor [data-content-type="heading"][data-level="3"] {
+    counter-reset: h4counter;
+}
+
+.bn-editor [data-content-type="heading"][data-level="4"] {
+    counter-reset: h5counter;
+}
+
+.bn-editor [data-content-type="heading"][data-level="2"] .bn-inline-content::before {
+    counter-increment: h2counter;
+    content: counter(h2counter) ". ";
+    font-weight: bold;
+}
+
+.bn-editor [data-content-type="heading"][data-level="3"] .bn-inline-content::before {
+    counter-increment: h3counter;
+    content: counter(h2counter) "." counter(h3counter) " ";
+    font-weight: bold;
+}
+
+.bn-editor [data-content-type="heading"][data-level="4"] .bn-inline-content::before {
+    counter-increment: h4counter;
+    content: counter(h2counter) "." counter(h3counter) "." counter(h4counter) " ";
+    font-weight: bold;
+}
+
+/* ─── Heading Styles (reduced spacing) ──────────────────────────── */
+
+.bn-editor [data-content-type="heading"][data-level="1"] {
+    text-align: center;
+    font-size: 2em !important;
+    line-height: 1.2;
+    margin: 0.8em auto 0.5em !important;
+    color: black;
+}
+
+.bn-editor [data-content-type="heading"][data-level="2"] {
+    font-size: 1.6em !important;
+    margin: 0.8em auto 0.4em !important;
+    border-bottom: 2px solid var(--mm-accent) !important;
+    padding-bottom: 0.2em !important;
+}
+
+.bn-editor [data-content-type="heading"][data-level="3"] {
+    font-size: 1.3em !important;
+    line-height: 1.43;
+    margin: 0.6em auto 0.3em !important;
+}
+
+.bn-editor [data-content-type="heading"][data-level="4"] {
+    font-size: 1.15em !important;
+    margin: 0.5em auto 0.3em !important;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+/* ─── Paragraphs (reduced spacing) ──────────────────────────────── */
+
+.bn-editor [data-content-type="paragraph"] {
+    line-height: 1.7;
+    word-spacing: 0.05rem;
+    color: var(--mm-para);
+    margin: 0.2em 0 !important;
+}
+
+.bn-editor .bn-block-outer {
+    margin-bottom: 1px !important;
+    padding: 1px 0 !important;
+}
+
+/* ─── Links ─────────────────────────────────────────────────────── */
+
+.bn-editor a {
+    border-bottom: 2px solid var(--mm-link-underline) !important;
+    padding: 0 4px;
+    transition: 0.3s;
+    color: var(--mm-link-text) !important;
+    text-decoration: none !important;
+}
+
+.bn-editor a:hover {
+    border-radius: 6px;
+    border-bottom: 2px solid transparent !important;
+    background-color: var(--mm-link-underline);
+    color: #ffffffe6 !important;
+    cursor: pointer;
+}
+
+/* ─── Inline Code ───────────────────────────────────────────────── */
+
+.bn-editor code {
+    padding: 2px 4px !important;
+    border-radius: 2px !important;
+    font-family: var(--mm-code-font) !important;
+    font-size: 0.9rem !important;
+    color: var(--mm-code-fg) !important;
+    background-color: var(--mm-code-bg) !important;
+}
+
+/* ─── Code Blocks (preserve syntax highlighting) ────────────────── */
+/* Only style the container background, do NOT override text colors */
+/* so that BlockNote's built-in syntax highlighting is preserved    */
+
+.bn-editor [data-content-type="codeBlock"],
+.bn-editor [data-content-type="codeBlock"] > div,
+.bn-editor [data-content-type="codeBlock"] pre,
+.bn-editor [data-content-type="codeBlock"] code,
+.bn-editor [data-content-type="codeBlock"] .bn-inline-content {
+    background: #282c34 !important;
+    background-color: #282c34 !important;
+}
+
+.bn-editor [data-content-type="codeBlock"] {
+    border-radius: 6px !important;
+    border: none !important;
+    font-family: var(--mm-code-font) !important;
+    font-size: 0.92em !important;
+    line-height: 1.5 !important;
+    margin: 0.3em 0 !important;
+    padding: 4px 0 !important;
+    overflow-x: auto;
+}
+
+.bn-editor [data-content-type="codeBlock"] pre {
+    margin: 0 !important;
+    padding: 12px 16px !important;
+}
+
+.bn-editor .bn-block-outer:has([data-content-type="codeBlock"]) {
+    margin-top: 2px !important;
+    margin-bottom: 2px !important;
+    padding: 0 !important;
+}
+
+/* Reduce code block top/bottom outer spacing */
+.bn-editor .bn-block-outer:has([data-content-type="codeBlock"]) {
+    margin-top: 2px !important;
+    margin-bottom: 2px !important;
+    padding: 0 !important;
+}
+
+/* ─── Blockquotes ───────────────────────────────────────────────── */
+
+.bn-editor [data-content-type="quote"] {
+    border-left: 5px solid var(--mm-blockquote-border) !important;
+    padding: 10px 15px !important;
+    color: #3f3f3f;
+    background-color: var(--mm-blockquote-bg) !important;
+    border-radius: 3px !important;
+}
+
+/* ─── Tables ────────────────────────────────────────────────────── */
+
+.bn-editor table {
+    font-size: 12pt;
+    padding: 0;
+}
+
+.bn-editor table tr:nth-child(2n) {
+    background-color: var(--mm-table-even);
+}
+
+.bn-editor table tr:hover {
+    background-color: var(--mm-table-hover);
+}
+
+.bn-editor table th {
+    font-weight: bold !important;
+    border: 1px solid var(--mm-table-border) !important;
+    background-color: var(--mm-table-header-bg) !important;
+    border-bottom: 0 !important;
+    text-align: left;
+    padding: 6px 13px !important;
+}
+
+.bn-editor table td {
+    border: 1px solid var(--mm-table-border) !important;
+    text-align: left;
+    padding: 6px 13px !important;
+}
+
+/* ─── Horizontal Rule ───────────────────────────────────────────── */
+
+.bn-editor hr {
+    background-image: repeating-linear-gradient(
+        -45deg,
+        var(--mm-hr-color),
+        var(--mm-hr-color) 4px,
+        transparent 4px,
+        transparent 8px
+    ) !important;
+    border: 0 !important;
+    height: 3px !important;
+    margin: 20px 0 !important;
+    background-color: transparent !important;
+}
+
+/* ─── List Items ────────────────────────────────────────────────── */
+
+.bn-editor [data-content-type="bulletListItem"],
+.bn-editor [data-content-type="numberedListItem"] {
+    line-height: 1.7;
+    margin: 3px 0 !important;
+}
+
+.bn-editor [data-content-type="bulletListItem"]::before,
+.bn-editor [data-content-type="numberedListItem"]::before {
+    color: var(--mm-list-color) !important;
+}
+
+/* ─── Check List Items ──────────────────────────────────────────── */
+
+.bn-editor [data-content-type="checkListItem"] input[type="checkbox"] {
+    accent-color: var(--mm-task-checked);
+}
+
+.bn-editor [data-content-type="checkListItem"][data-checked="true"] .bn-inline-content {
+    text-decoration: line-through;
+    color: #999;
+}
+
+/* ─── Images ────────────────────────────────────────────────────── */
+
+.bn-editor [data-content-type="image"] img {
+    border-radius: 4px;
+    margin: 8px auto 4px;
+}
+
+/* ─── Text Selection ────────────────────────────────────────────── */
+
+.bn-editor ::selection {
+    background: var(--mm-select-bg);
+}
+
+/* ─── Bold ──────────────────────────────────────────────────────── */
+
+.bn-editor strong {
+    font-weight: bold;
+    color: #333;
+}
+
+/* ─── Placeholder text ──────────────────────────────────────────── */
+
+.bn-editor [data-placeholder]::before {
+    opacity: 0.35;
+    font-style: normal;
+}

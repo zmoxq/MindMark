@@ -1,6 +1,24 @@
+// AIService.swift
+// Multi-provider AI integration: Anthropic Claude, Ollama (local models)
+
 import SwiftUI
 import Combine
 
+// MARK: - AI Provider
+
+enum AIProvider: String, CaseIterable, Identifiable {
+    case claude = "Claude (Anthropic)"
+    case ollama = "Ollama (Local)"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .claude: return "cloud"
+        case .ollama: return "desktopcomputer"
+        }
+    }
+}
 
 // MARK: - AI Action Types
 
@@ -66,23 +84,53 @@ class AIService: ObservableObject {
     @Published var lastResult: String = ""
     @Published var lastError: String?
 
-    // API key stored in UserDefaults (user enters it in Settings)
-    var apiKey: String {
+    // Provider selection
+    @Published var selectedProvider: AIProvider {
+        didSet { UserDefaults.standard.set(selectedProvider.rawValue, forKey: "aiProvider") }
+    }
+
+    // Claude settings
+    var claudeAPIKey: String {
         get { UserDefaults.standard.string(forKey: "anthropicAPIKey") ?? "" }
         set { UserDefaults.standard.set(newValue, forKey: "anthropicAPIKey") }
     }
 
-    var hasAPIKey: Bool { !apiKey.isEmpty }
+    var claudeModel: String {
+        get { UserDefaults.standard.string(forKey: "claudeModel") ?? "claude-sonnet-4-20250514" }
+        set { UserDefaults.standard.set(newValue, forKey: "claudeModel") }
+    }
 
-    /// Process text with an AI action
-    func process(text: String, action: AIAction, customPrompt: String? = nil) async -> AIResponse? {
-        guard hasAPIKey else {
-            lastError = "Please set your Anthropic API key in Settings."
-            return nil
+    // Ollama settings
+    var ollamaURL: String {
+        get { UserDefaults.standard.string(forKey: "ollamaURL") ?? "http://localhost:11434" }
+        set { UserDefaults.standard.set(newValue, forKey: "ollamaURL") }
+    }
+
+    var ollamaModel: String {
+        get { UserDefaults.standard.string(forKey: "ollamaModel") ?? "gemma3:27b" }
+        set { UserDefaults.standard.set(newValue, forKey: "ollamaModel") }
+    }
+
+    @Published var availableOllamaModels: [String] = []
+
+    // Convenience
+    var hasAPIKey: Bool {
+        switch selectedProvider {
+        case .claude: return !claudeAPIKey.isEmpty
+        case .ollama: return true  // No API key needed for local
         }
+    }
 
+    init() {
+        let saved = UserDefaults.standard.string(forKey: "aiProvider") ?? ""
+        selectedProvider = AIProvider(rawValue: saved) ?? .claude
+    }
+
+    // MARK: - Process
+
+    func process(text: String, action: AIAction, customPrompt: String? = nil) async -> AIResponse? {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            lastError = "No text to process."
+            await MainActor.run { lastError = "No text to process." }
             return nil
         }
 
@@ -96,16 +144,22 @@ class AIService: ObservableObject {
         }
 
         do {
-            let result = try await callClaude(
-                systemPrompt: action.systemPrompt,
-                userMessage: userMessage
-            )
+            let result: String
+            switch selectedProvider {
+            case .claude:
+                guard !claudeAPIKey.isEmpty else {
+                    await MainActor.run { isProcessing = false; lastError = "Please set your Claude API key." }
+                    return nil
+                }
+                result = try await callClaude(systemPrompt: action.systemPrompt, userMessage: userMessage)
+            case .ollama:
+                result = try await callOllama(systemPrompt: action.systemPrompt, userMessage: userMessage)
+            }
 
             await MainActor.run {
                 isProcessing = false
                 lastResult = result
             }
-
             return AIResponse(text: result, action: action)
         } catch {
             await MainActor.run {
@@ -116,7 +170,7 @@ class AIService: ObservableObject {
         }
     }
 
-    // MARK: - Claude API Call
+    // MARK: - Claude API
 
     private func callClaude(systemPrompt: String, userMessage: String) async throws -> String {
         let url = URL(string: "https://api.anthropic.com/v1/messages")!
@@ -124,11 +178,11 @@ class AIService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue(claudeAPIKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
 
         let body: [String: Any] = [
-            "model": "claude-sonnet-4-20250514",
+            "model": claudeModel,
             "max_tokens": 4096,
             "system": systemPrompt,
             "messages": [
@@ -137,16 +191,12 @@ class AIService: ObservableObject {
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIError.invalidResponse
-        }
-
-        guard httpResponse.statusCode == 200 else {
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw AIError.apiError(statusCode: httpResponse.statusCode, message: errorBody)
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            throw AIError.apiError(statusCode: code, message: errorBody)
         }
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -155,8 +205,70 @@ class AIService: ObservableObject {
               let text = firstBlock["text"] as? String else {
             throw AIError.parseError
         }
-
         return text
+    }
+
+    // MARK: - Ollama API (OpenAI-compatible)
+
+    private func callOllama(systemPrompt: String, userMessage: String) async throws -> String {
+        let endpoint = "\(ollamaURL)/api/chat"
+        guard let url = URL(string: endpoint) else {
+            throw AIError.apiError(statusCode: 0, message: "Invalid Ollama URL: \(endpoint)")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120  // Local models can be slow
+
+        let body: [String: Any] = [
+            "model": ollamaModel,
+            "stream": false,
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": userMessage]
+            ]
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            throw AIError.apiError(statusCode: code, message: "Ollama error (\(code)): \(errorBody)")
+        }
+
+        // Ollama /api/chat response format: { "message": { "content": "..." } }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let message = json["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw AIError.parseError
+        }
+        return content
+    }
+
+    // MARK: - Ollama Model Discovery
+
+    func fetchOllamaModels() async {
+        let endpoint = "\(ollamaURL)/api/tags"
+        guard let url = URL(string: endpoint) else { return }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let models = json["models"] as? [[String: Any]] else { return }
+
+            let names = models.compactMap { $0["name"] as? String }.sorted()
+            await MainActor.run {
+                availableOllamaModels = names
+                if !names.isEmpty && !names.contains(ollamaModel) {
+                    ollamaModel = names.first ?? "gemma3:27b"
+                }
+            }
+        } catch {
+            print("[AI] Failed to fetch Ollama models: \(error)")
+        }
     }
 }
 

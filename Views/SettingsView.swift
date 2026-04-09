@@ -11,14 +11,19 @@ struct SettingsView: View {
             GeneralSettingsView()
                 .tabItem { Label("General", systemImage: "gear") }
 
+            ThemeSettingsView()
+                .tabItem { Label("Theme", systemImage: "paintbrush") }
+
             AISettingsView(aiService: aiService)
                 .tabItem { Label("AI", systemImage: "sparkles") }
         }
         #if os(macOS)
-        .frame(width: 500, height: 360)
+        .frame(width: 520, height: 400)
         #endif
     }
 }
+
+// MARK: - General
 
 struct GeneralSettingsView: View {
     @EnvironmentObject var vaultManager: VaultManager
@@ -27,8 +32,7 @@ struct GeneralSettingsView: View {
         Form {
             Section("Vault") {
                 HStack {
-                    Text("Location:")
-                        .foregroundStyle(.secondary)
+                    Text("Location:").foregroundStyle(.secondary)
                     Text(vaultManager.vaultURL?.path ?? "None")
                         .lineLimit(1).truncationMode(.head)
                     Spacer()
@@ -48,78 +52,104 @@ struct GeneralSettingsView: View {
                         .font(.caption).foregroundStyle(.tertiary)
                 }
             }
-
-            Section("Editor") {
-                Text("Theme and editor settings coming soon...")
-                    .foregroundStyle(.tertiary)
-            }
         }
         .formStyle(.grouped)
         .padding()
     }
 }
 
-struct AISettingsView: View {
-    @ObservedObject var aiService: AIService
-    @State private var apiKeyInput: String = ""
-    @State private var showKey: Bool = false
+// MARK: - Theme
+
+struct ThemeSettingsView: View {
+    @EnvironmentObject var vaultManager: VaultManager
 
     var body: some View {
         Form {
-            Section("Anthropic Claude API") {
+            Section("Editor Theme") {
+                Picker("Theme", selection: $vaultManager.currentTheme) {
+                    ForEach(vaultManager.availableThemes) { theme in
+                        HStack {
+                            Text(theme.name)
+                            if !theme.isBuiltIn {
+                                Text("(Custom)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .tag(theme.id)
+                    }
+                }
+                .pickerStyle(.inline)
+
+                Text("The selected theme will be applied to the editor immediately.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Section("Custom Themes") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("API Key")
+                    Text("Add your own .css theme files to:")
                         .font(.callout)
                         .foregroundStyle(.secondary)
 
                     HStack {
-                        if showKey {
-                            TextField("sk-ant-...", text: $apiKeyInput)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(.body, design: .monospaced))
-                        } else {
-                            SecureField("sk-ant-...", text: $apiKeyInput)
-                                .textFieldStyle(.roundedBorder)
-                        }
+                        Text(VaultManager.customThemesDirectory.path)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
 
-                        Button(action: { showKey.toggle() }) {
-                            Image(systemName: showKey ? "eye.slash" : "eye")
+                        #if os(macOS)
+                        Button("Open") {
+                            NSWorkspace.shared.open(VaultManager.customThemesDirectory)
                         }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        #endif
+                    }
 
-                        Button("Save") {
-                            aiService.apiKey = apiKeyInput
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.indigo)
-                        .disabled(apiKeyInput.isEmpty)
+                    Button("Reload Themes") {
+                        vaultManager.loadThemes()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+        .onAppear {
+            vaultManager.loadThemes()
+        }
+    }
+}
+
+// MARK: - AI
+
+struct AISettingsView: View {
+    @ObservedObject var aiService: AIService
+    @State private var apiKeyInput: String = ""
+    @State private var showKey: Bool = false
+    @State private var ollamaURLInput: String = ""
+
+    var body: some View {
+        Form {
+            // Provider selection
+            Section("AI Provider") {
+                Picker("Provider", selection: $aiService.selectedProvider) {
+                    ForEach(AIProvider.allCases) { provider in
+                        Label(provider.rawValue, systemImage: provider.icon)
+                            .tag(provider)
                     }
                 }
-                .onAppear {
-                    apiKeyInput = aiService.apiKey
-                }
+                .pickerStyle(.inline)
+            }
 
-                if aiService.hasAPIKey {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Text("API key is set")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    HStack {
-                        Image(systemName: "exclamationmark.circle")
-                            .foregroundStyle(.orange)
-                        Text("Enter your API key to enable AI features")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Text("Get your API key at console.anthropic.com\nYour key is stored locally and never shared.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+            // Provider-specific settings
+            if aiService.selectedProvider == .claude {
+                claudeSettings
+            } else {
+                ollamaSettings
             }
 
             Section("AI Features") {
@@ -135,5 +165,122 @@ struct AISettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
+        .onAppear {
+            apiKeyInput = aiService.claudeAPIKey
+            ollamaURLInput = aiService.ollamaURL
+        }
+    }
+
+    // MARK: - Claude Settings
+
+    private var claudeSettings: some View {
+        Section("Claude API") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("API Key")
+                    .font(.callout).foregroundStyle(.secondary)
+
+                HStack {
+                    if showKey {
+                        TextField("sk-ant-...", text: $apiKeyInput)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced))
+                    } else {
+                        SecureField("sk-ant-...", text: $apiKeyInput)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    Button(action: { showKey.toggle() }) {
+                        Image(systemName: showKey ? "eye.slash" : "eye")
+                    }
+                    .buttonStyle(.borderless)
+
+                    Button("Save") {
+                        aiService.claudeAPIKey = apiKeyInput
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.indigo)
+                    .disabled(apiKeyInput.isEmpty)
+                }
+            }
+
+            if !aiService.claudeAPIKey.isEmpty {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Text("API key is set").font(.callout).foregroundStyle(.secondary)
+                }
+            }
+
+            Text("Get your API key at console.anthropic.com")
+                .font(.caption).foregroundStyle(.tertiary)
+        }
+    }
+
+    // MARK: - Ollama Settings
+
+    private var ollamaSettings: some View {
+        Section("Ollama (Local)") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Server URL")
+                    .font(.callout).foregroundStyle(.secondary)
+
+                HStack {
+                    TextField("http://localhost:11434", text: $ollamaURLInput)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(.body, design: .monospaced))
+
+                    Button("Save") {
+                        aiService.ollamaURL = ollamaURLInput
+                        Task { await aiService.fetchOllamaModels() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.indigo)
+                }
+            }
+
+            // Model selection
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Model").font(.callout).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Refresh") {
+                        Task { await aiService.fetchOllamaModels() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+                if aiService.availableOllamaModels.isEmpty {
+                    // Manual input if models not fetched
+                    TextField("gemma3:27b", text: Binding(
+                        get: { aiService.ollamaModel },
+                        set: { aiService.ollamaModel = $0 }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.body, design: .monospaced))
+
+                    Text("Enter model name or click Refresh to auto-detect installed models.")
+                        .font(.caption).foregroundStyle(.tertiary)
+                } else {
+                    Picker("", selection: Binding(
+                        get: { aiService.ollamaModel },
+                        set: { aiService.ollamaModel = $0 }
+                    )) {
+                        ForEach(aiService.availableOllamaModels, id: \.self) { model in
+                            Text(model).tag(model)
+                        }
+                    }
+                    .labelsHidden()
+
+                    Text("\(aiService.availableOllamaModels.count) model(s) found")
+                        .font(.caption).foregroundStyle(.tertiary)
+                }
+            }
+
+            HStack {
+                Image(systemName: "info.circle").foregroundStyle(.secondary)
+                Text("Make sure Ollama is running: `ollama serve`")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 }
